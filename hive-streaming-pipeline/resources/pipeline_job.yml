@@ -1,0 +1,66 @@
+resources:
+  jobs:
+    hive_streaming_pipeline:
+      name: "hive-streaming-pipeline"
+      description: "Raw -> Bronze -> Silver -> Dashboard"
+
+      tasks:
+
+        - task_key: config_and_paths
+          description: "Load storage config and path constants"
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: >-
+              /Users/debavijit.ad@gmail.com/hive_streaming/01_config_and_path
+            source: WORKSPACE
+
+        - task_key: schema_definition
+          description: "Define case classes and telemetry schema"
+          depends_on:
+            - task_key: config_and_paths
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: >-
+              /Users/debavijit.ad@gmail.com/hive_streaming/02_schema_definition
+            source: WORKSPACE
+
+        - task_key: raw_to_bronze
+          description: "Auto Loader ingestion raw to bronze Delta"
+          depends_on:
+            - task_key: schema_definition
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: >-
+              /Users/debavijit.ad@gmail.com/hive_streaming/03_raw_to_bronze
+            source: WORKSPACE
+
+        - task_key: bronze_to_silver
+          description: "Transform buffering and quality metrics"
+          depends_on:
+            - task_key: raw_to_bronze
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: >-
+              /Users/debavijit.ad@gmail.com/hive_streaming/04_bronze_to_silver
+            source: WORKSPACE
+
+        - task_key: dashboard
+          description: "Refresh dashboard visualisations"
+          depends_on:
+            - task_key: bronze_to_silver
+          existing_cluster_id: ${var.cluster_id}
+          notebook_task:
+            notebook_path: >-
+              /Users/debavijit.ad@gmail.com/hive_streaming/05_dashboard
+            source: WORKSPACE
+
+      schedule:
+        quartz_cron_expression: "0 0 0 * * ?"
+        timezone_id: "Asia/Kolkata"
+        pause_status: PAUSED
+
+      email_notifications:
+        on_failure:
+          - debavijit.ad@gmail.com
+        on_success:
+          - debavijit.ad@gmail.com

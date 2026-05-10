@@ -1,0 +1,7 @@
+node_modules/
+dist/
+local.settings.json
+.databricks/
+*.js.map
+*.d.ts
+.env

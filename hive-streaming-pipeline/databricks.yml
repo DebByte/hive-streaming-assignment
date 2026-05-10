@@ -1,0 +1,27 @@
+# ======================
+# Databricks Asset Bundle - Hive Streaming Pipeline
+# ======================
+
+bundle:
+  name: hive_streaming_pipeline
+
+include:
+  - resources/*.yml
+
+variables:
+  cluster_id:
+    description: "Classic cluster ID to run notebooks on"
+    default: "0506-082346-0f90bdej"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-7405610801529370.10.azuredatabricks.net
+
+  # Production target - for scheduled runs
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-7405610801529370.10.azuredatabricks.net
