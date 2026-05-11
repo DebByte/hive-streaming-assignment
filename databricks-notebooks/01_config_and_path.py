@@ -92,7 +92,7 @@
 # COMMAND ----------
 
 # MAGIC %scala
-# MAGIC val rawDf = spark.read.parquet(Paths.raw)
+# MAGIC val rawDf = spark.read.parquet("abfss://raw@streamingdata.dfs.core.windows.net/eventDate=2025-11-13/")
 # MAGIC rawDf.printSchema()
 # MAGIC
 # MAGIC // Test: nested columns

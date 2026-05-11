@@ -38,24 +38,31 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,Ingestion Function
 # MAGIC %scala
-# MAGIC def ingestRawToBronze(): StreamingQuery = {
+# MAGIC import org.apache.spark.sql.functions.{current_timestamp, lit, col, regexp_extract, to_date}
+# MAGIC import org.apache.spark.sql.streaming.{StreamingQuery, Trigger}
+# MAGIC import java.time.LocalDate
+# MAGIC
+# MAGIC def ingestParquetStream(): StreamingQuery = {
 # MAGIC     val ingestedDate = LocalDate.now().toString
-# MAGIC     val jsonStream = spark.readStream
+# MAGIC     spark.readStream
 # MAGIC         .format("cloudFiles")
-# MAGIC         .option("cloudFiles.format", "json")
-# MAGIC         .option("cloudFiles.schemaLocation", "abfss://bronze@streamingdata.dfs.core.windows.net/_json_schema/")
-# MAGIC         .option("cloudFiles.inferColumnTypes", "true")
+# MAGIC         .option("cloudFiles.format", "parquet")
+# MAGIC         .option("pathGlobFilter", "*.parquet")           
+# MAGIC         .option("cloudFiles.schemaLocation", Paths.autoloaderSchema)
+# MAGIC         .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+# MAGIC         .option("cloudFiles.includeExistingFiles", "true")
 # MAGIC         .load(Paths.raw)
-# MAGIC         .withColumn("eventDate",to_date(regexp_extract(col("_metadata.file_path"),"eventDate=([0-9]{4}-[0-9]{2}-[0-9]{2})",1)))
-# MAGIC         .withColumn("_ingested_at", current_timestamp())
-# MAGIC         .withColumn("_source_file", col("_metadata.file_path"))
+# MAGIC         .withColumn("eventDate", to_date(regexp_extract(
+# MAGIC             col("_metadata.file_path"),
+# MAGIC             "eventDate=([0-9]{4}-[0-9]{2}-[0-9]{2})", 1)))
+# MAGIC         .withColumn("_ingested_at",   current_timestamp())
+# MAGIC         .withColumn("_source_file",   col("_metadata.file_path"))
 # MAGIC         .withColumn("_ingested_date", lit(ingestedDate))
-# MAGIC     
-# MAGIC     rawStream.writeStream
+# MAGIC         .writeStream
 # MAGIC         .format("delta")
-# MAGIC         .option("checkpointLocation", Paths.autoloaderCheckpoint)
+# MAGIC         .option("checkpointLocation",
+# MAGIC             "abfss://bronze@streamingdata.dfs.core.windows.net/_checkpoint_parquet/")
 # MAGIC         .outputMode("append")
 # MAGIC         .option("mergeSchema", "true")
 # MAGIC         .partitionBy("eventDate", "_ingested_date")
@@ -63,32 +70,94 @@
 # MAGIC         .start(Paths.bronzeTelemetry)
 # MAGIC }
 # MAGIC
-# MAGIC println("ingestRawToBronze defined")
+# MAGIC def ingestJsonStream(): StreamingQuery = {
+# MAGIC     val ingestedDate = LocalDate.now().toString
+# MAGIC    // Explicit schema — no inference
+# MAGIC     import org.apache.spark.sql.types._
+# MAGIC
+# MAGIC     val trafficStatsSchema = StructType(Seq(
+# MAGIC         StructField("requests",      IntegerType),
+# MAGIC         StructField("responses",     DoubleType),
+# MAGIC         StructField("requestedData", LongType),
+# MAGIC         StructField("receivedData",  LongType)
+# MAGIC     ))
+# MAGIC     val trafficDistSchema = StructType(Seq(
+# MAGIC         StructField("sourceTraffic", trafficStatsSchema),
+# MAGIC         StructField("p2pTraffic",    trafficStatsSchema)
+# MAGIC     ))
+# MAGIC     val jsonSchema = StructType(Seq(
+# MAGIC         StructField("customerId",          StringType),
+# MAGIC         StructField("contentId",           StringType),
+# MAGIC         StructField("clientId",            StringType),
+# MAGIC         StructField("timestampInfo",       StructType(Seq(
+# MAGIC             StructField("server", LongType),
+# MAGIC             StructField("agent",  LongType)
+# MAGIC         ))),
+# MAGIC         StructField("player",              StructType(Seq(
+# MAGIC             StructField("bufferings",    IntegerType),
+# MAGIC             StructField("bufferingTime", IntegerType)
+# MAGIC         ))),
+# MAGIC         StructField("totalDistribution",   trafficDistSchema),
+# MAGIC         StructField("qualityDistribution", MapType(StringType, trafficDistSchema))
+# MAGIC     ))
+# MAGIC
+# MAGIC     spark.readStream
+# MAGIC         .format("cloudFiles")
+# MAGIC         .option("cloudFiles.format", "json")
+# MAGIC         .option("pathGlobFilter", "*.json") 
+# MAGIC         .option("cloudFiles.schemaLocation",
+# MAGIC             "abfss://bronze@streamingdata.dfs.core.windows.net/_checkpoint_json_schema/")
+# MAGIC         .option("cloudFiles.includeExistingFiles", "true")
+# MAGIC         .schema(jsonSchema)  
+# MAGIC         .option("cloudFiles.includeExistingFiles", "true")
+# MAGIC         .load(Paths.raw)
+# MAGIC         .withColumn("eventDate", to_date(regexp_extract(
+# MAGIC             col("_metadata.file_path"),
+# MAGIC             "eventDate=([0-9]{4}-[0-9]{2}-[0-9]{2})", 1)))
+# MAGIC         .withColumn("_ingested_at",   current_timestamp())
+# MAGIC         .withColumn("_source_file",   col("_metadata.file_path"))
+# MAGIC         .withColumn("_ingested_date", lit(ingestedDate))
+# MAGIC         .writeStream
+# MAGIC         .format("delta")
+# MAGIC         .option("checkpointLocation",
+# MAGIC             "abfss://bronze@streamingdata.dfs.core.windows.net/_checkpoint_json/")
+# MAGIC         .outputMode("append")
+# MAGIC         .option("mergeSchema", "true")
+# MAGIC         .partitionBy("eventDate", "_ingested_date")
+# MAGIC         .trigger(Trigger.AvailableNow())
+# MAGIC         .start(Paths.bronzeTelemetry)
+# MAGIC }
+# MAGIC
+# MAGIC println("Stream functions defined")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Execute
+# MAGIC ### Execute Parquet and JSON stream
 
 # COMMAND ----------
 
 # MAGIC %scala
-# MAGIC println(s"Source      : ${Paths.raw}")
-# MAGIC println(s"Destination : ${Paths.bronzeTelemetry}")
-# MAGIC println(s"Schema store: ${Paths.autoloaderSchema}")
-# MAGIC println(s"Checkpoint  : ${Paths.autoloaderCheckpoint}")
-# MAGIC println("Starting ingestion...")
+# MAGIC println("=== Step 1: Ingesting Parquet files ===")
+# MAGIC val parquetQuery = ingestParquetStream()
+# MAGIC parquetQuery.awaitTermination()
+# MAGIC println("Parquet stream complete")
 # MAGIC
-# MAGIC val bronzeQuery = ingestRawToBronze()
-# MAGIC val completedCleanly = bronzeQuery.awaitTermination(timeoutMs = 10 * 60 * 1000L)
-# MAGIC if (completedCleanly)
-# MAGIC   println("Ingestion complete — stopped automatically")
-# MAGIC else {
-# MAGIC   println("Timeout reached — stopping manually")
-# MAGIC   bronzeQuery.stop()
-# MAGIC }
+# MAGIC val afterParquet = spark.read.format("delta").load(Paths.bronzeTelemetry).count()
+# MAGIC println(s"Bronze rows after parquet: $afterParquet")
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC println("=== Step 2: Ingesting JSON files ===")
+# MAGIC val jsonQuery = ingestJsonStream()
+# MAGIC jsonQuery.awaitTermination()
+# MAGIC println("JSON stream complete")
 # MAGIC
-# MAGIC println("Raw to Bronze ingestion complete")
+# MAGIC val afterJson = spark.read.format("delta").load(Paths.bronzeTelemetry).count()
+# MAGIC println(s"Bronze rows after JSON: $afterJson")
+# MAGIC spark.read.format("delta").load(Paths.bronzeTelemetry)
+# MAGIC   .groupBy("eventDate").count().orderBy("eventDate").show()
 
 # COMMAND ----------
 
@@ -131,8 +200,12 @@
 # MAGIC
 # MAGIC println(s"Row count BEFORE rerun : $countBefore")
 # MAGIC
-# MAGIC val rerunQuery = ingestRawToBronze()
-# MAGIC rerunQuery.awaitTermination()
+# MAGIC //Stream functions
+# MAGIC val q1 = ingestParquetStream()
+# MAGIC q1.awaitTermination()
+# MAGIC
+# MAGIC val q2 = ingestJsonStream()
+# MAGIC q2.awaitTermination()
 # MAGIC
 # MAGIC val countAfter = spark.read
 # MAGIC   .format("delta")
@@ -140,8 +213,9 @@
 # MAGIC   .count()
 # MAGIC
 # MAGIC println(s"Row count AFTER rerun  : $countAfter")
+# MAGIC println(s"Rows added             : ${countAfter - countBefore}")
 # MAGIC
 # MAGIC if (countBefore == countAfter)
-# MAGIC   println("no duplicates on rerun")
+# MAGIC   println("Idempotency confirmed — no duplicates on rerun")
 # MAGIC else
 # MAGIC   println(s"Count changed by ${countAfter - countBefore} rows")

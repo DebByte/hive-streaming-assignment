@@ -43,7 +43,7 @@
 # MAGIC   timestampInfo:       TimestampInfo,
 # MAGIC   player:              PlayerStats,
 # MAGIC   totalDistribution:   TrafficDistribution,
-# MAGIC   qualityDistribution: Map[String, TrafficDistribution],                   
+# MAGIC   qualityDistribution: Map[String, TrafficDistribution]           
 # MAGIC )
 # MAGIC
 # MAGIC println("Case classes defined")
@@ -75,7 +75,7 @@
 # MAGIC %scala
 # MAGIC import org.apache.spark.sql.functions.{col, explode}
 # MAGIC val rawPath = "abfss://raw@streamingdata.dfs.core.windows.net/"
-# MAGIC val validationDf = spark.read.schema(telemetrySchema).parquet(rawPath)
+# MAGIC val validationDf = spark.read.schema(telemetrySchema).parquet("abfss://raw@streamingdata.dfs.core.windows.net/eventDate=2025-11-13/")
 # MAGIC
 # MAGIC println(s"Row count     : ${validationDf.count()}")
 # MAGIC println(s"Column count  : ${validationDf.columns.size}")

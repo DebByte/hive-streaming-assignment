@@ -223,7 +223,19 @@
 # %scala
 # dbutils.fs.rm(Paths.silverBuffering + "_checkpoint/", recurse = true)
 # dbutils.fs.rm(Paths.silverQuality   + "_checkpoint/", recurse = true)
-# println("✅ Checkpoints cleared")
+# println("Checkpoints cleared")
+
+# COMMAND ----------
+
+# %scala
+# dbutils.fs.rm("abfss://bronze@streamingdata.dfs.core.windows.net/_checkpoint_parquet/", recurse=true)
+# dbutils.fs.rm("abfss://bronze@streamingdata.dfs.core.windows.net/_checkpoint_json/", recurse=true)
+# dbutils.fs.rm("abfss://bronze@streamingdata.dfs.core.windows.net/_checkpoint_json_schema/", recurse=true)
+# dbutils.fs.rm("abfss://bronze@streamingdata.dfs.core.windows.net/_autoloader_checkpoint/", recurse=true)
+# dbutils.fs.rm("abfss://bronze@streamingdata.dfs.core.windows.net/_autoloader_schema/", recurse=true)
+# dbutils.fs.rm("abfss://bronze@streamingdata.dfs.core.windows.net/_json_schema/", recurse=true)
+# dbutils.fs.rm("abfss://silver@streamingdata.dfs.core.windows.net/_checkpoint/", recurse=true)
+# println("All checkpoints cleared")
 
 # COMMAND ----------
 
@@ -263,7 +275,7 @@
 # MAGIC   .start()
 # MAGIC
 # MAGIC query.awaitTermination()
-# MAGIC println("✅ Bronze to Silver complete")
+# MAGIC println("Bronze to Silver complete")
 
 # COMMAND ----------
 
